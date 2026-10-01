@@ -596,9 +596,15 @@
     return { dist, p, b, aA, pg, pm, state, modelSd: Math.sqrt(vHit) };
   }
 
+  // 假設這一場沒有 MISS：把 MISS 機率拿掉，其餘判定重新正規化
+  function withoutMiss(cat) {
+    const s = 1 - cat[4];
+    return s > 0 ? [cat[0] / s, cat[1] / s, cat[2] / s, cat[3] / s, 0] : [0, 0, 0, 1, 0];
+  }
+
   // 由分布算出 DDR 的各項期望值與 FC 機率
-  function ddrPredict(dist, chart) {
-    const cat = categoryProbs(dist, GAMES.ddr.windows);
+  const ddrPredict = (dist, chart) => ddrFromCat(categoryProbs(dist, GAMES.ddr.windows), chart);
+  function ddrFromCat(cat, chart) {
     const r = ddrScore(cat, chart);
     const n = chart.steps;
     const allAbove = q => Math.exp(n * Math.log1p(-Math.min(q, 1 - 1e-15)));
@@ -682,7 +688,7 @@
     erfc, Phi, PhiC, PhiInv, lnGamma, gammaPQ, betaI, bisect,
     MODELS, GAMES, makeDist, judge, scoreSpread, rankOf, sdForRate, absQuantile,
     normalSdFromRatio, fitGN, ddrScore, floor10, sdForDdr, nelderMead, fitCounts, categoryProbs, logLik,
-    normalDist, mixtureScale, tScale, gnScale, shiftScale, plateauScale, ddrPredict,
+    normalDist, mixtureScale, tScale, gnScale, shiftScale, plateauScale, ddrPredict, ddrFromCat, withoutMiss,
     boundedScale, bandDist, beyondDist, mixDist, TRI_DEFAULT, TRI_REF, triRates, triModel,
     playCounts, playSteps, playChart, playScore, playEx, fitAccidents, fitTri, calibrateDdr
   };
