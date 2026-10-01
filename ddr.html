@@ -1,0 +1,282 @@
+<title>DDR 判定誤差・分數</title>
+<meta name="description" content="DanceDanceRevolution（A 系列～WORLD 計分）的判定誤差分布 → 期望分數模型">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+TC:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="style.css">
+<style>
+/* DDR 頁專用：計分規則表、失分分解、擬合結果表 */
+.rules { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 24px; }
+.rules dl { margin: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 14px; font-size: 14px; }
+.rules dt { font: 600 12.5px/1.9 var(--f-display); letter-spacing: .04em; color: var(--ink-2); white-space: nowrap; }
+.rules dd { margin: 0; }
+.rules .src { font-size: 12.5px; color: var(--muted); }
+.rules .src a { color: inherit; }
+.badge { display: inline-block; font: 600 11px/1 var(--f-body); padding: 3px 7px; border-radius: 4px; margin-left: 6px; vertical-align: 1px; }
+.badge.confirmed { background: var(--good-soft); color: var(--good); }
+.badge.measured { background: var(--warn-soft); color: var(--warn); }
+.loss { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; font-size: 12.5px; }
+.loss li { display: flex; justify-content: space-between; gap: 12px; }
+.loss li span { color: var(--ink-2); }
+.loss li b { font: 500 12.5px var(--f-mono); font-variant-numeric: tabular-nums; }
+.loss li.total { border-top: 1px solid var(--line); padding-top: 4px; margin-top: 2px; }
+.loss li.total span { color: var(--ink); font-weight: 500; }
+.chart-inputs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.chart-inputs .ctrl label { font-size: 12.5px; }
+.chart-inputs input[type="number"] { width: 100%; }
+.fit-counts { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+.fit-counts label { font: 600 11.5px var(--f-display); letter-spacing: .04em; color: var(--ink-2); }
+.fit-counts input[type="number"] { width: 100%; text-align: left; }
+.fit-tbl td.hl { font-weight: 600; }
+.fit-tbl tr.best th, .fit-tbl tr.best td { background: var(--accent-soft); }
+.fit-tbl tr.obs th, .fit-tbl tr.obs td { font-weight: 600; }
+.fit-tbl small { display: block; font: 400 11.5px var(--f-mono); color: var(--muted); }
+.fit-tbl .btn { padding: 4px 10px; font-size: 12.5px; }
+.cross { font-size: 12.5px; color: var(--ink-2); }
+#p2-conv thead tr:nth-child(2) th { text-align: right; }
+#p2-conv thead th[colspan] { text-align: center; }
+.xlink { font-size: 13px; }
+.xlink a { color: var(--accent); }
+@media (max-width: 900px) { .rules { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 560px) {
+  .fit-counts { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .chart-inputs { grid-template-columns: minmax(0, 1fr); }
+}
+</style>
+
+<div class="wrap">
+
+  <header class="top">
+    <span class="eyebrow">DanceDanceRevolution · A 系列～WORLD 計分</span>
+    <h1>DDR 判定誤差・分數</h1>
+    <p class="lede">把每一步的踩點誤差 <i class="v">X</i>（ms）當成隨機變數，用 DDR 現行計分算出期望分數。PART 1 用常態模型；PART 2 換成非常態分布比較；PART 3 用你實際的判定數，以最大概似法找出最合適的分布。</p>
+    <div class="spec">
+      <span><i class="sw" style="background:var(--ddr)"></i>MARVELOUS ±16.67　PERFECT ±33.33　GREAT ±91.67　GOOD ±141.67 ms</span>
+    </div>
+    <p class="xlink">其他版本：<a href="https://claude.ai/artifact/7ikZRKAoRvVeK8NYf62js3" target="_blank" rel="noopener">DDR 準度模型（用顯示的 SD 校準）</a>　<a href="https://claude.ai/artifact/7N845bbzomFoYv8n2hyPuX" target="_blank" rel="noopener">IIDX／pop'n 版</a></p>
+  </header>
+
+  <!-- 計分規則 -->
+  <section class="part" id="rules">
+    <div class="part-head">
+      <span class="eyebrow">計分規則</span>
+      <h2>DDR 現行計分（DDR A 起沿用至 WORLD）</h2>
+    </div>
+    <div class="rules">
+      <div class="panel">
+        <dl>
+          <dt>基本分 U</dt>
+          <dd>U = 1,000,000 ÷（步數 + freeze arrow 數 + shock arrow 數）<span class="badge confirmed">已確認</span></dd>
+          <dt>MARVELOUS／O.K.</dt><dd>U</dd>
+          <dt>PERFECT</dt><dd>U − 10</dd>
+          <dt>GREAT</dt><dd>0.6U − 10</dd>
+          <dt>GOOD</dt><dd>0.2U − 10</dd>
+          <dt>MISS／N.G.</dt><dd>0</dd>
+          <dt>顯示分數</dt><dd>內部保留小數，顯示時以 10 分為單位無條件捨去</dd>
+          <dt>EX SCORE</dt><dd>MARVELOUS／O.K. 3、PERFECT 2、GREAT 1、其餘 0<span class="badge confirmed">已確認</span></dd>
+          <dt>評級</dt><dd>AAA 990,000／AA+ 950,000／AA 900,000／AA− 890,000／A+ 850,000／A 800,000／A− 790,000／B+ 750,000<span class="badge confirmed">已確認</span></dd>
+        </dl>
+      </div>
+      <div class="panel">
+        <dl>
+          <dt>判定窗</dt>
+          <dd>MARVELOUS ±16.67、PERFECT ±33.33、GREAT ±91.67、GOOD ±141.67 ms（±1／2／5.5／8.5 幀）<span class="badge measured">社群實測</span></dd>
+          <dt>適用版本</dt>
+          <dd>DDR A（2016）起的 A20、A20 PLUS、A3、WORLD。目前找不到 WORLD 修改計分的公開資料。</dd>
+          <dt>本工具假設</dt>
+          <dd>freeze arrow 全部 O.K.、shock arrow 全部避開；時間誤差只作用在一般步（含 freeze 起點）。同時踩（跳）算 1 步。</dd>
+        </dl>
+        <p class="src" style="margin-top:12px">Konami 沒有公布判定窗的毫秒數，這裡是社群量測值。計分公式在多個來源一致。來源列在頁尾。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- PART 1 -->
+  <section class="part" id="normal">
+    <div class="part-head">
+      <span class="eyebrow">Part 1 · 常態模型</span>
+      <h2>調整 σ，看 DDR 期望分數</h2>
+      <p class="lede">假設 <i class="v">X</i> ~ N(0, <i class="v">σ</i><sup>2</sup>)。DDR 的 PERFECT 也會扣 10 分，所以滿 PERFECT 不是 1,000,000；步數越多，σ 對分數的影響越大。</p>
+    </div>
+
+    <div class="p1-grid">
+      <div class="p1-side">
+        <div class="panel ctrl">
+          <div class="ctrl-top">
+            <label for="p1-sd">標準差 σ（ms）</label>
+            <input type="number" id="p1-sd-num" min="5" max="50" step="0.01" aria-label="σ 數值">
+          </div>
+          <input type="range" id="p1-sd" min="5" max="50" step="0.01">
+          <div class="chart-inputs" style="margin-top:10px">
+            <div class="ctrl"><label for="c-steps">步數</label><input type="number" id="c-steps" min="10" max="3000" step="1"></div>
+            <div class="ctrl"><label for="c-freezes">freeze arrow</label><input type="number" id="c-freezes" min="0" max="500" step="1"></div>
+            <div class="ctrl"><label for="c-shocks">shock arrow</label><input type="number" id="c-shocks" min="0" max="500" step="1"></div>
+          </div>
+          <span class="ctrl-hint" id="c-hint"></span>
+        </div>
+
+        <article class="panel game">
+          <div class="game-h"><i class="sw" style="background:var(--ddr)"></i><h3>DanceDanceRevolution</h3><span class="rank" id="p1-rank">—</span></div>
+          <div class="big" id="p1-val">—</div>
+          <p class="sub" id="p1-sub"></p>
+          <ul class="judge" id="p1-judge"></ul>
+          <div class="reach-h">失分從哪裡來（期望值）</div>
+          <ul class="loss" id="p1-loss"></ul>
+          <div class="reach-h">達成機率（只計入隨機波動）</div>
+          <ul class="reach" id="p1-reach"></ul>
+          <p class="cross" id="p1-cross"></p>
+        </article>
+      </div>
+
+      <div class="p1-main">
+        <div class="panel">
+          <div class="chart-head"><h3>σ 與 DDR 分數</h3><span class="note">圓點是各評級所需的 σ</span></div>
+          <div class="chart" id="chart1"><svg role="img" aria-label="σ 與 DDR 期望分數的關係"></svg><div class="tip" hidden></div></div>
+          <p class="chart-foot">點一下圖表可以把 σ 設成該位置。</p>
+        </div>
+
+        <div class="panel">
+          <div class="chart-head"><h3>各評級所需的 σ</h3><span class="note">點一列套用該 σ</span></div>
+          <div class="tbl-wrap">
+            <table class="tbl" id="p1-table">
+              <thead><tr><th>評級</th><th>所需 σ</th><th>EX 分數率</th><th>同 σ 的 IIDX</th><th>同 σ 的 pop'n</th><th>目前 σ</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PART 2 -->
+  <section class="part" id="shape">
+    <div class="part-head">
+      <span class="eyebrow">Part 2 · 非常態模型</span>
+      <h2>尾巴對 DDR 特別重要</h2>
+      <p class="lede">DDR 的 GREAT 窗有 ±91.67 ms、GOOD 到 ±141.67 ms，比 IIDX 寬很多，所以分數對「偶爾大幅失準」很敏感：一次 MISS 會整整少掉 U。譜面設定沿用 PART 1。</p>
+    </div>
+
+    <p class="finding panel" id="p2-finding"></p>
+
+    <div class="tool-grid">
+      <div class="panel controls">
+        <div class="tabs" role="group" aria-label="分布模型">
+          <button type="button" data-model="normal">常態</button>
+          <button type="button" data-model="gn">廣義常態</button>
+          <button type="button" data-model="mixture">雙常態混合</button>
+          <button type="button" data-model="t">Student-t</button>
+          <button type="button" data-model="shift">偏移混合</button>
+          <button type="button" data-model="plateau">平台常態</button>
+        </div>
+        <p class="ctrl-hint tab-hint"><b>尖峰厚尾</b>：雙常態混合、Student-t。<b>平頂尾薄</b>：偏移混合、平台常態。廣義常態兩邊都能表示（β &lt; 2 尖、β &gt; 2 平）。</p>
+        <div class="model-desc" id="p2-desc"></div>
+        <div class="ctrl">
+          <div class="ctrl-top">
+            <label for="p2-sd">標準差 SD（ms）</label>
+            <input type="number" id="p2-sd-num" min="5" max="50" step="0.01" aria-label="SD 數值">
+          </div>
+          <input type="range" id="p2-sd" min="5" max="50" step="0.01">
+        </div>
+        <div class="ctrl">
+          <div class="ctrl-top">
+            <label for="p2-mu">平均偏移 μ（ms）</label>
+            <input type="number" id="p2-mu-num" min="-12" max="12" step="0.1" aria-label="μ 數值">
+          </div>
+          <input type="range" id="p2-mu" min="-12" max="12" step="0.1">
+          <span class="ctrl-hint">負值＝整體偏 FAST，正值＝偏 SLOW。</span>
+        </div>
+        <div id="p2-params" class="controls"></div>
+        <dl class="derived" id="p2-derived"></dl>
+      </div>
+
+      <div class="viz">
+        <div class="panel">
+          <div class="chart-head">
+            <h3>誤差分布與判定窗</h3>
+            <div class="switch" role="group" aria-label="縱軸刻度">
+              <button type="button" data-scale="lin">線性</button>
+              <button type="button" data-scale="log">對數</button>
+            </div>
+          </div>
+          <ul class="legend" style="margin-bottom:6px">
+            <li><i style="background:var(--model)"></i>目前模型</li>
+            <li><i style="background:var(--ref)"></i>常態（μ = 0、同 SD）</li>
+          </ul>
+          <div class="chart" id="chart2"><svg role="img" aria-label="誤差分布與 DDR 判定窗"></svg><div class="tip" hidden></div></div>
+          <p class="chart-foot">縱軸是每 1 ms 的步數比例（%）。切到對數刻度才看得到 GOOD、MISS 區域的差別。</p>
+        </div>
+
+        <div class="panel">
+          <div class="chart-head"><h3>同 SD 下的比較</h3></div>
+          <div class="tbl-wrap">
+            <table class="tbl" id="p2-compare">
+              <thead><tr><th></th><th>常態</th><th>目前模型</th><th>差</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="conv-grid">
+      <div class="panel">
+        <div class="chart-head">
+          <h3>SD 與 DDR 分數</h3>
+          <ul class="legend">
+            <li><i style="background:var(--model)"></i>目前模型</li>
+            <li><i style="background:var(--ref)"></i>常態</li>
+          </ul>
+        </div>
+        <div class="chart" id="chart3"><svg role="img" aria-label="兩種分布下 SD 與 DDR 分數"></svg><div class="tip" hidden></div></div>
+      </div>
+      <div class="panel conv-side">
+        <h3>評級所需 SD 與 IIDX 換算</h3>
+        <div class="tbl-wrap">
+          <table class="tbl" id="p2-conv">
+            <thead>
+              <tr><th rowspan="2">DDR 評級</th><th colspan="2">所需 SD</th><th colspan="2">同分布的 IIDX</th></tr>
+              <tr><th>常態</th><th>目前</th><th>常態</th><th>目前</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p class="note">DDR 的 MARVELOUS、PERFECT 窗和 IIDX 的 PGREAT、GREAT 相同（±16.67／±33.33 ms），所以同一個分布在兩款遊戲的換算很直接。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- PART 3 -->
+  <section class="part" id="fit">
+    <div class="part-head">
+      <span class="eyebrow">Part 3 · 用自己的成績擬合</span>
+      <h2>哪個分布最符合我的判定數？</h2>
+      <p class="lede">DDR 的結果畫面有五種判定數，比 IIDX 多兩格資訊，可以直接用最大概似法擬合每個模型，再用 AIC 比較。AIC 越小越好：差 2 以內算差不多，差 10 以上代表明顯較差。</p>
+    </div>
+    <div class="panel fit-form" id="fit-form">
+      <div class="fit-counts">
+        <div class="ctrl"><label for="f-m">MARVELOUS</label><input type="number" id="f-m" min="0" step="1"></div>
+        <div class="ctrl"><label for="f-p">PERFECT</label><input type="number" id="f-p" min="0" step="1"></div>
+        <div class="ctrl"><label for="f-g">GREAT</label><input type="number" id="f-g" min="0" step="1"></div>
+        <div class="ctrl"><label for="f-gd">GOOD</label><input type="number" id="f-gd" min="0" step="1"></div>
+        <div class="ctrl"><label for="f-miss">MISS</label><input type="number" id="f-miss" min="0" step="1"></div>
+      </div>
+      <span class="ctrl-hint">預設是範例數值，請換成你自己的成績。只填一般步的判定；freeze arrow 的 O.K.／N.G. 和 shock arrow 不要算進來。</span>
+    </div>
+    <div class="panel fit-out" id="fit-out"></div>
+  </section>
+
+  <footer class="foot">
+    <span class="eyebrow">來源與限制</span>
+    <ul>
+      <li>計分公式：<a href="https://remywiki.com/User:Arcorann/DDR_Scoring" target="_blank" rel="noopener">RemyWiki – DDR Scoring</a>、<a href="https://sil.fyi/games/ddr-scores-explained/" target="_blank" rel="noopener">sil.fyi – DDR scores explained</a></li>
+      <li>EX SCORE：<a href="https://remywiki.com/What_Is_DDR" target="_blank" rel="noopener">RemyWiki – What Is DDR</a>；評級分數線：<a href="https://yuisin.com/ddr/ddrac/rank.html" target="_blank" rel="noopener">yuisin.com – クリアランクに必要なスコア</a></li>
+      <li>判定窗（社群實測）：<a href="https://zenius-i-vanisher.com/v5.2/thread?threadid=9728" target="_blank" rel="noopener">ZiV – OpenITG timing windows to match DDR A</a>、<a href="https://zenius-i-vanisher.com/v5.2/thread?threadid=11131" target="_blank" rel="noopener">ZiV – DDR's true timing windows since A</a></li>
+      <li>每一步的誤差彼此獨立；沒有考慮輸入延遲、譜面配置、BPM 變化、freeze 放開與 shock 被踩。</li>
+      <li>擬合假設誤差中心在 0。MISS 也包含完全沒踩的情況，這部分會被算成「很大的誤差」，讓尾巴看起來更厚。</li>
+    </ul>
+  </footer>
+</div>
+
+<script src="model.js"></script>
+<script src="ui.js"></script>
+<script src="ddr.js"></script>

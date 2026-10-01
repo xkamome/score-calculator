@@ -1,0 +1,248 @@
+<title>判定誤差・分數換算</title>
+<meta name="description" content="beatmania IIDX 與 pop'n music 的判定誤差分布 → 期望分數模型">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+TC:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="style.css">
+
+<div class="wrap">
+
+  <header class="top">
+    <span class="eyebrow">beatmania IIDX × pop'n music</span>
+    <h1>判定誤差・分數換算</h1>
+    <p class="lede">把每顆 note 的打點誤差 <i class="v">X</i>（ms）當成隨機變數，由判定窗算出期望分數。PART 1 重現原圖的常態模型；PART 2 換成更接近玩家實際的分布，看換算會偏多少；PART 3 用自己的判定數檢查分布形狀。</p>
+    <div class="spec">
+      <span><i class="sw" style="background:var(--iidx)"></i>IIDX　PGREAT ±16.67　GREAT ±33.33</span>
+      <span><i class="sw" style="background:var(--popn)"></i>pop'n　COOL ±25　GREAT ±50　GOOD ±100</span>
+    </div>
+    <p class="xlink" style="font-size:13px">DDR 版：<a href="https://claude.ai/artifact/L1DvD9TE6bswVBNZUGMGAk" target="_blank" rel="noopener" style="color:var(--accent)">DDR 判定誤差・分數</a></p>
+  </header>
+
+  <!-- PART 1 -->
+  <section class="part" id="normal">
+    <div class="part-head">
+      <span class="eyebrow">Part 1 · 常態模型</span>
+      <h2>調整 σ，看期望分數</h2>
+      <p class="lede">假設 <i class="v">X</i> ~ N(0, <i class="v">σ</i><sup>2</sup>)，和原圖相同。拖動 σ，或直接點圖表上的位置。</p>
+    </div>
+
+    <div class="p1-grid">
+      <div class="p1-side">
+        <div class="panel ctrl">
+          <div class="ctrl-top">
+            <label for="p1-sd">標準差 σ（ms）</label>
+            <input type="number" id="p1-sd-num" min="5" max="30" step="0.01" aria-label="σ 數值">
+          </div>
+          <input type="range" id="p1-sd" min="5" max="30" step="0.01">
+          <div class="ctrl-top" style="margin-top:8px">
+            <label for="p1-notes">譜面物量（note 數）</label>
+            <input type="number" id="p1-notes" min="100" max="5000" step="1">
+          </div>
+          <span class="ctrl-hint">物量只影響重打波動與達成機率，不影響期望值。</span>
+        </div>
+
+        <article class="panel game">
+          <div class="game-h"><i class="sw" style="background:var(--iidx)"></i><h3>beatmania IIDX</h3><span class="rank" id="p1-iidx-rank">—</span></div>
+          <div class="big" id="p1-iidx-val">—</div>
+          <p class="sub" id="p1-iidx-sub"></p>
+          <ul class="judge" id="p1-iidx-judge"></ul>
+          <div class="reach-h">達成機率（只計入隨機波動）</div>
+          <ul class="reach" id="p1-iidx-reach"></ul>
+        </article>
+
+        <article class="panel game">
+          <div class="game-h"><i class="sw" style="background:var(--popn)"></i><h3>pop'n music</h3><span class="rank" id="p1-popn-rank">—</span></div>
+          <div class="big" id="p1-popn-val">—</div>
+          <p class="sub" id="p1-popn-sub"></p>
+          <ul class="judge" id="p1-popn-judge"></ul>
+          <div class="reach-h">達成機率（只計入隨機波動）</div>
+          <ul class="reach" id="p1-popn-reach"></ul>
+        </article>
+      </div>
+
+      <div class="p1-main">
+        <div class="panel">
+          <div class="chart-head">
+            <h3>σ 與分數率</h3>
+            <ul class="legend">
+              <li><i style="background:var(--iidx)"></i>IIDX 分數率</li>
+              <li><i style="background:var(--popn)"></i>pop'n 分數 ÷ 1,000</li>
+            </ul>
+          </div>
+          <div class="chart" id="chart1"><svg role="img" aria-label="σ 與兩款遊戲分數率的關係"></svg><div class="tip" hidden></div></div>
+          <p class="chart-foot">圓點是各評級所需的 σ。點一下圖表可以把 σ 設成該位置。</p>
+        </div>
+
+        <div class="panel">
+          <div class="chart-head"><h3>各評級所需的 σ</h3><span class="note">點一列套用該 σ</span></div>
+          <div class="tbl-wrap">
+            <table class="tbl" id="p1-table">
+              <thead><tr><th>評級</th><th>所需 σ</th><th>IIDX 分數率</th><th>pop'n 分數</th><th>目前 σ</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="panel formula">
+          <div><b>IIDX</b>　<i class="v">R</i> = [ P(|<i class="v">X</i>| ≤ 16.67) + P(|<i class="v">X</i>| ≤ 33.33) ] ÷ 2</div>
+          <div><b>pop'n</b>　<i class="v">R</i> = P<sub>COOL</sub> + 0.7 P<sub>GREAT</sub> + 0.4 P<sub>GOOD</sub>，分數 = 100,000 × <i class="v">R</i></div>
+          <div><b>常態</b>　P(|<i class="v">X</i>| ≤ <i class="v">w</i>) = 2Φ(<i class="v">w</i> / <i class="v">σ</i>) − 1</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PART 2 -->
+  <section class="part" id="shape">
+    <div class="part-head">
+      <span class="eyebrow">Part 2 · 非常態模型</span>
+      <h2>玩家的誤差分布不是常態</h2>
+    </div>
+
+    <div class="why-grid">
+      <div class="why">
+        <h3>為什麼不是常態</h3>
+        <ul>
+          <li><b>每顆 note 的難度不同。</b>單押、交互、皿、縱連的誤差本來就不一樣大。把許多不同 σ 的常態疊在一起（尺度混合），結果一定比同 SD 的常態<b>中心更尖、尾巴更厚</b>。</li>
+          <li><b>偶發失誤。</b>看錯、手滑、讀譜跟不上，會產生一小群離中心很遠的誤差。常態分布幾乎給這些情況零機率。</li>
+          <li><b>整體偏移。</b>多數玩家整體偏 FAST 或 SLOW，中心不在 0，要另外用平均偏移 <i class="v">μ</i> 描述。</li>
+        </ul>
+        <p>你描述的「中間特別集中、往外很快變少」，統計上叫<b>高峰態（leptokurtic）</b>，通常和厚尾一起出現。這時標準差被尾巴拉大，已經不太能代表準度；改用「一半的 note 落在 ±幾 ms 內」會更直觀。</p>
+      </div>
+      <aside class="advice">
+        <h3>建議的建模方式</h3>
+        <ol>
+          <li>先用 PART 3 的<b>廣義常態 β</b> 檢查自己的分布偏尖（β &lt; 2）還是偏平（β &gt; 2）。</li>
+          <li>偏尖時，正式建模用<b>雙常態混合</b>（參數最好解釋）或 <b>Student-t</b>（只多一個參數）。偏平時，用<b>偏移混合</b>（左右手等 offset 不一致）或<b>平台常態</b>（±a 內分不出早晚）。</li>
+          <li>兩者都加上平均偏移 <i class="v">μ</i>，對應 FAST／SLOW 的偏向。</li>
+        </ol>
+      </aside>
+    </div>
+
+    <p class="finding panel" id="p2-finding"></p>
+
+    <div class="tool-grid">
+      <div class="panel controls">
+        <div class="tabs" role="group" aria-label="分布模型">
+          <button type="button" data-model="normal">常態</button>
+          <button type="button" data-model="gn">廣義常態</button>
+          <button type="button" data-model="mixture">雙常態混合</button>
+          <button type="button" data-model="t">Student-t</button>
+          <button type="button" data-model="shift">偏移混合</button>
+          <button type="button" data-model="plateau">平台常態</button>
+        </div>
+        <p class="ctrl-hint tab-hint"><b>尖峰厚尾</b>：雙常態混合、Student-t。<b>平頂尾薄</b>：偏移混合、平台常態。廣義常態兩邊都能表示（β &lt; 2 尖、β &gt; 2 平）。</p>
+        <div class="model-desc" id="p2-desc"></div>
+        <div class="ctrl">
+          <div class="ctrl-top">
+            <label for="p2-sd">標準差 SD（ms）</label>
+            <input type="number" id="p2-sd-num" min="5" max="30" step="0.01" aria-label="SD 數值">
+          </div>
+          <input type="range" id="p2-sd" min="5" max="30" step="0.01">
+        </div>
+        <div class="ctrl">
+          <div class="ctrl-top">
+            <label for="p2-mu">平均偏移 μ（ms）</label>
+            <input type="number" id="p2-mu-num" min="-12" max="12" step="0.1" aria-label="μ 數值">
+          </div>
+          <input type="range" id="p2-mu" min="-12" max="12" step="0.1">
+          <span class="ctrl-hint">負值＝整體偏 FAST，正值＝偏 SLOW。</span>
+        </div>
+        <div id="p2-params" class="controls"></div>
+        <dl class="derived" id="p2-derived"></dl>
+      </div>
+
+      <div class="viz">
+        <div class="panel">
+          <div class="chart-head">
+            <h3>誤差分布與判定窗</h3>
+            <div class="switch" role="group" aria-label="縱軸刻度">
+              <button type="button" data-scale="lin">線性</button>
+              <button type="button" data-scale="log">對數</button>
+            </div>
+          </div>
+          <ul class="legend" style="margin-bottom:6px">
+            <li><i style="background:var(--model)"></i>目前模型</li>
+            <li><i style="background:var(--ref)"></i>原圖（常態、μ = 0、同 SD）</li>
+          </ul>
+          <div class="chart" id="chart2"><svg role="img" aria-label="誤差分布與判定窗"></svg><div class="tip" hidden></div></div>
+          <p class="chart-foot">縱軸是每 1 ms 的 note 比例（%）。切到對數刻度才看得到尾巴的差別。</p>
+        </div>
+
+        <div class="panel">
+          <div class="chart-head"><h3>同 SD 下的比較</h3></div>
+          <div class="tbl-wrap">
+            <table class="tbl" id="p2-compare">
+              <thead><tr><th></th><th>原圖（常態）</th><th>目前模型</th><th>差</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="conv-grid">
+      <div class="panel">
+        <div class="chart-head">
+          <h3>IIDX → pop'n 換算曲線</h3>
+          <ul class="legend">
+            <li><i style="background:var(--model)"></i>目前模型</li>
+            <li><i style="background:var(--ref)"></i>原圖（常態）</li>
+          </ul>
+        </div>
+        <div class="chart" id="chart3"><svg role="img" aria-label="IIDX 分數率對應的 pop'n 分數"></svg><div class="tip" hidden></div></div>
+        <p class="chart-foot">同一位玩家（同一個分布）在兩款遊戲的期望分數。曲線越低，代表同樣的 IIDX 分數在 pop'n 拿得越少。</p>
+      </div>
+      <div class="panel conv-side">
+        <h3>評級換算</h3>
+        <div class="tbl-wrap">
+          <table class="tbl" id="p2-conv">
+            <thead><tr><th>換算</th><th>原圖</th><th>目前模型</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p class="note">形狀和 μ 不變、只改 SD 時，點只會沿著同一條曲線移動。兩款遊戲之間的換算，取決於分布的<b>形狀</b>和偏移，而不是 SD。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- PART 3 -->
+  <section class="part" id="fit">
+    <div class="part-head">
+      <span class="eyebrow">Part 3 · 用自己的成績檢驗</span>
+      <h2>我的誤差分布偏尖還是偏平？</h2>
+      <p class="lede">輸入一場 IIDX 的判定數。如果誤差真的是常態，用 PGREAT 率和 PGREAT＋GREAT 率分別反推的 σ 會一樣；兩者差越多，越不像常態。再用廣義常態同時滿足這兩個比例，解出形狀 β。</p>
+    </div>
+    <div class="fit-grid">
+      <form class="panel fit-form" id="fit-form" novalidate>
+        <div class="ctrl">
+          <label for="fit-total">譜面物量（note 數）</label>
+          <input type="number" class="wide" id="fit-total" min="1" step="1">
+        </div>
+        <div class="ctrl">
+          <label for="fit-pg">PGREAT 數</label>
+          <input type="number" class="wide" id="fit-pg" min="0" step="1">
+        </div>
+        <div class="ctrl">
+          <label for="fit-gr">GREAT 數</label>
+          <input type="number" class="wide" id="fit-gr" min="0" step="1">
+        </div>
+        <span class="ctrl-hint">預設是範例數值，請換成你自己的成績。其餘 note（GOOD、BAD、漏按的 POOR）自動算成「GOOD 以下」；空 POOR 不影響。</span>
+      </form>
+      <div class="panel fit-out" id="fit-out"></div>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <span class="eyebrow">前提與限制</span>
+    <ul>
+      <li>每顆 note 的誤差彼此獨立；沒有考慮輸入裝置延遲、譜面配置、BPM、判定曲線。</li>
+      <li>pop'n 判定窗沿用原圖的通常判定近似值（±25／±50／±100 ms）。</li>
+      <li>分數都是期望值，不保證實際成績。達成機率只反映隨機波動，不含狀態好壞。</li>
+    </ul>
+  </footer>
+</div>
+
+<script src="model.js"></script>
+<script src="ui.js"></script>
+<script src="app.js"></script>
