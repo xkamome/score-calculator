@@ -1,7 +1,7 @@
 (function () {
   'use strict';
   const M = window.ScoreModel;
-  const { GAMES, normalDist, triModel, TRI_DEFAULT, TRI_REF, ddrPredict, calibrateDdr, floor10, rankOf, absQuantile, playScore, playSteps } = M;
+  const { GAMES, normalDist, triModel, TRI_DEFAULT, ddrPredict, ddrFromCat, withoutMiss, categoryProbs, calibrateDdr, floor10, rankOf, absQuantile, playScore, playSteps } = M;
   const {
     $, $$, clamp, round, store, sup, pct, int, small, expo, reach, signedInt,
     later, L, T, C, drawChart, niceStep, ticks, interp, rulerRow, judgeName, bindNumber
@@ -50,7 +50,7 @@
   const FIELDS = ['sd', 'mean', 'marv', 'perf', 'great', 'good', 'miss', 'ok', 'ng'];
   const DEFAULT = {
     sd: 12, mean: 0, chart: { steps: 500, freezes: 20, shocks: 0 },
-    k: 1, tri: fromPrm(TRI_DEFAULT), logY: false,
+    k: 1, tri: fromPrm(TRI_DEFAULT), logY: false, noMiss: false,
     plays: EXAMPLE_PLAYS
   };
   const { S, save } = store('ddr-model-v2', DEFAULT);
@@ -63,8 +63,10 @@
   const money = v => int(floor10(v));
   const rankName = v => rankOf(G, v / 1e6)?.name ?? '未達 A';
   const triOf = sd => triModel(sd, S.mean, toPrm(S.tri));
-  const pNormal = (sd, ch = chartObj()) => ddrPredict(normalDist(S.k * sd, S.mean), ch);
-  const pTri = (sd, ch = chartObj()) => ddrPredict(triOf(sd).dist, ch);
+  // 「假設沒有 MISS」時，兩個模型都把 MISS 機率拿掉再算
+  const predict = (dist, ch) => S.noMiss ? ddrFromCat(withoutMiss(categoryProbs(dist, G.windows)), ch) : ddrPredict(dist, ch);
+  const pNormal = (sd, ch = chartObj()) => predict(normalDist(S.k * sd, S.mean), ch);
+  const pTri = (sd, ch = chartObj()) => predict(triOf(sd).dist, ch);
   const cnt = v => v >= 99.95 ? int(v) : v >= 0.05 ? v.toFixed(1) : v > 0 ? small(v).replace('%', '') : '0';
 
   // =====================================================================
@@ -81,7 +83,7 @@
   function renderModels() {
     const sd = S.sd, ch = chartObj();
     const rn = pNormal(sd, ch);
-    const tm = triOf(sd), rt = ddrPredict(tm.dist, ch);
+    const tm = triOf(sd), rt = predict(tm.dist, ch);
     const U = 1e6 / (ch.steps + ch.freezes);
 
     $('#c-hint').textContent = `每個物件 U = ${U.toFixed(2)} 分；一個 GREAT 少 ${int(0.4 * U + 10)} 分，一個 MISS 少 ${int(U)} 分，一個 PERFECT 只少 10 分。`;
@@ -96,7 +98,7 @@
     $('#t-derived').innerHTML = [
       ['不太準的比例', pct(tm.p, 1)],
       ['不太準的寬度', tm.p > 0 ? '±' + tm.b.toFixed(1) + ' ms' : '—'],
-      ['出事（整首）', `GOOD ${cnt(tm.pg * ch.steps)}・MISS ${cnt(tm.pm * ch.steps)}`],
+      ['出事（整首）', `GOOD ${cnt(tm.pg * ch.steps)}・MISS ${S.noMiss ? '0（假設）' : cnt(tm.pm * ch.steps)}`],
       ['模型 SD', tm.modelSd.toFixed(2) + ' ms']
     ].map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('');
     const warn = $('#t-warn');
@@ -175,7 +177,7 @@
   // ---------- SD 曲線：分數、PFC、GFC ----------
   let curveCache = null;
   function curves() {
-    const key = [S.k, S.mean, ...TRI_CTRLS.map(c => S.tri[c.key]), S.chart.steps, S.chart.freezes, S.chart.shocks].join('/');
+    const key = [S.k, S.mean, S.noMiss, ...TRI_CTRLS.map(c => S.tri[c.key]), S.chart.steps, S.chart.freezes, S.chart.shocks].join('/');
     if (curveCache && curveCache.key === key) return curveCache;
     const n = { score: [], pfc: [], gfc: [] }, t = { score: [], pfc: [], gfc: [] };
     for (let sd = SD_MIN; sd <= SD_MAX + 1e-9; sd += 0.25) {
@@ -287,6 +289,7 @@
 
   function runCalib() {
     const valid = validPlays();
+    $('#plays-count').textContent = S.plays.length;
     S.plays.forEach((p, i) => {
       const tr = $(`#plays tr[data-i="${i}"]`);
       if (tr) tr.classList.toggle('bad', !isValid(p));
@@ -388,7 +391,8 @@
     $('#c-mean').value = S.mean;
     $('#k').value = S.k;
     for (const c of TRI_CTRLS) $(`#t-${c.key}`).value = S.tri[c.key];
-    $$('.switch button').forEach(b => b.setAttribute('aria-pressed', String((b.dataset.scale === 'log') === S.logY)));
+    $$('#scale-switch button').forEach(b => b.setAttribute('aria-pressed', String((b.dataset.scale === 'log') === S.logY)));
+    $$('#miss-switch button').forEach(b => b.setAttribute('aria-pressed', String((b.dataset.miss === 'none') === S.noMiss)));
   }
   function setSd(v) {
     S.sd = round(clamp(v, SD_MIN, SD_MAX), 1);
@@ -409,7 +413,12 @@
       later(renderModels); save();
     });
   }
-  $$('.switch button').forEach(b => b.addEventListener('click', () => {
+  $$('#miss-switch button').forEach(b => b.addEventListener('click', () => {
+    S.noMiss = b.dataset.miss === 'none';
+    syncControls();
+    later(renderModels); save();
+  }));
+  $$('#scale-switch button').forEach(b => b.addEventListener('click', () => {
     S.logY = b.dataset.scale === 'log';
     syncControls();
     later(renderModels); save();

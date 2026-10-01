@@ -1,3 +1,7 @@
+<!doctype html>
+<html lang="zh-Hant">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>DDR 準度模型</title>
 <meta name="description" content="DDR：用遊戲顯示的標準差與タイミング平均推算分數、判定數與 PFC／GFC 機率，比較常態模型與三態模型（超準／不太準／出事），並用自己的判定數校準">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -41,6 +45,14 @@
 .derived-row dt { font-size: 12px; color: var(--muted); }
 .derived-row dd { margin: 0; font: 600 14.5px var(--f-mono); font-variant-numeric: tabular-nums; }
 .warn { font-size: 12.5px; color: var(--warn); }
+.miss-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.miss-row .lbl { font-size: 13px; font-weight: 700; }
+details.tune { border-top: 1px solid var(--line); padding-top: 10px; }
+details > summary { cursor: pointer; font-size: 13.5px; font-weight: 600; color: var(--accent); }
+details.tune[open] > summary { margin-bottom: 12px; }
+.tune-body { display: grid; gap: 12px; }
+details.plays-box > summary { font-size: 15px; }
+details.plays-box[open] > summary { margin-bottom: 14px; }
 
 .cmp-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 20px; align-items: start; }
 .fc-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
@@ -79,8 +91,8 @@
   <header class="top">
     <span class="eyebrow">DanceDanceRevolution · A 系列～WORLD 計分</span>
     <h1>DDR 準度模型</h1>
-    <p class="lede">輸入遊戲顯示的標準差（バラつき）與タイミング平均，兩個模型會各自推算期望分數、各判定數與 PFC／GFC 機率。左邊是常態分布；右邊是三態模型，把每一步分成「超準」、「不太準」、「出事」三種狀態。最下面輸入自己結算畫面上的判定數，讓兩個模型自動校準。</p>
-    <p class="xlink">其他版本：<a href="https://claude.ai/artifact/L1DvD9TE6bswVBNZUGMGAk" target="_blank" rel="noopener">DDR 判定誤差・分數</a>　<a href="https://claude.ai/artifact/7N845bbzomFoYv8n2hyPuX" target="_blank" rel="noopener">IIDX／pop'n 版</a></p>
+    <p class="lede">輸入 DDR WORLD 結算畫面上的バラつき（SD）與タイミング平均，就能看到兩個模型推算的期望分數、各判定數與 PFC／GFC 機率。左邊是常態分布；右邊是三態模型，把每一步分成「超準」、「不太準」、「出事」三種狀態。</p>
+    <p class="xlink">其他頁面：<a href="ddr.html">DDR 判定誤差・分數</a>　<a href="index.html">IIDX／pop'n 版</a></p>
   </header>
 
   <section class="part" id="models">
@@ -98,6 +110,13 @@
           <div class="ctrl"><label for="c-shocks">shock arrow</label><input type="number" id="c-shocks" min="0" max="500" step="1"></div>
         </div>
         <span class="ctrl-hint">タイミング平均：FAST 填正數、SLOW 填負數（ms）。</span>
+        <div class="miss-row">
+          <span class="lbl">MISS</span>
+          <div class="switch" role="group" aria-label="MISS 的處理" id="miss-switch">
+            <button type="button" data-miss="model">照模型預測</button>
+            <button type="button" data-miss="none">假設沒有 MISS</button>
+          </div>
+        </div>
         <span class="ctrl-hint" id="c-hint"></span>
       </div>
     </div>
@@ -107,10 +126,13 @@
         <div class="model-h"><i class="sw" style="background:var(--c-normal)"></i><h3>常態分布</h3><span class="ptag">1 個參數</span></div>
         <div class="fx"><i class="v">X</i> ~ N(<i class="v">μ</i>, (<i class="v">k</i> · SD)<sup>2</sup>)</div>
         <p class="model-note">每一步的誤差都來自同一個常態分布，中心是タイミング平均 <i class="v">μ</i>。<i class="v">k</i> = 1 代表直接相信遊戲顯示的 SD。常態分布沒有邊界，所以每一步都有一點機率掉到很遠的地方。</p>
-        <div class="ctrl">
-          <div class="ctrl-top"><label for="k">SD 校準係數 k</label><output id="k-out"></output></div>
-          <input type="range" id="k" min="0.6" max="1.4" step="0.005">
-        </div>
+        <details class="tune">
+          <summary>調整參數</summary>
+          <div class="ctrl">
+            <div class="ctrl-top"><label for="k">SD 校準係數 k</label><output id="k-out"></output></div>
+            <input type="range" id="k" min="0.6" max="1.4" step="0.005">
+          </div>
+        </details>
         <dl class="derived-row" id="n-derived"></dl>
         <div class="head-row"><span class="big" id="n-score">—</span><span class="rank" id="n-rank">—</span></div>
         <div class="chips" id="n-chips"></div>
@@ -123,9 +145,14 @@
           <li><b>不太準</b>：誤差在 ±<i class="v">b</i> 以內，<i class="v">b</i> 最寬到 GREAT 窗（±91.67 ms），不會出 GOOD。</li>
           <li><b>出事</b>：踩錯、漏踩或嚴重失準，直接變成 GOOD 或 MISS；狀態好的場次幾乎不會有。</li>
         </ul>
+        <details class="tune">
+          <summary>公式與參數</summary>
+          <div class="tune-body">
         <div class="fx">超準、不太準：有界 Beta，<i class="v">f</i>(<i class="v">x</i>) ∝ (1 − (<i class="v">x</i> − <i class="v">μ</i>)<sup>2</sup>/<i class="v">a</i><sup>2</sup>)<sup><i class="v">α</i> − 1</sup>，|<i class="v">x</i> − <i class="v">μ</i>| ≤ <i class="v">a</i></div>
         <p class="model-note">SD 越大，「不太準」的比例越高，寬度 <i class="v">b</i> 也越寬（由 SD 反推）；出事率隨 SD 呈指數上升。α = 1 是均勻分布，α 越大越集中在中間。</p>
         <div class="tri-ctrls" id="tri-ctrls"></div>
+          </div>
+        </details>
         <dl class="derived-row" id="t-derived"></dl>
         <p class="warn" id="t-warn" hidden></p>
         <div class="head-row"><span class="big" id="t-score">—</span><span class="rank" id="t-rank">—</span></div>
@@ -147,7 +174,7 @@
       <div class="panel">
         <div class="chart-head">
           <h3>誤差分布</h3>
-          <div class="switch" role="group" aria-label="縱軸刻度">
+          <div class="switch" role="group" aria-label="縱軸刻度" id="scale-switch">
             <button type="button" data-scale="lin">線性</button>
             <button type="button" data-scale="log">對數</button>
           </div>
@@ -165,26 +192,29 @@
   <section class="part" id="calib">
     <div class="part-head">
       <span class="eyebrow">校準</span>
-      <h2>輸入你的判定數，讓模型貼近你</h2>
-      <p class="lede">每一列是一場，照抄 DDR WORLD 結算畫面「詳細リザルト」與「タイミンググラフ」的數字：顯示 SD（バラつき）、タイミング平均（FAST 為正）、各判定數與 freeze 的 O.K. 數。分數會由判定數自動算出；如果和畫面上的分數對不上，通常是有 freeze N.G.（畫面不直接顯示），把 N.G. 數補上就會吻合。兩個模型都用判定數做最大概似擬合。預設是從你相簿與推文圖片裡找到的 48 場（2026 年 2～6 月）。</p>
-    </div>
-
-    <div class="panel calib">
-      <div class="tbl-wrap">
-        <table class="tbl plays" id="plays">
-          <thead><tr><th>#</th><th>SD</th><th>平均</th><th>MARV</th><th>PERF</th><th>GREAT</th><th>GOOD</th><th>MISS</th><th>O.K.</th><th>N.G.</th><th>分數</th><th>常態誤差</th><th>三態誤差</th><th></th></tr></thead>
-          <tbody></tbody>
-        </table>
-      </div>
-      <div class="calib-actions">
-        <button type="button" class="btn" id="add-play">新增一場</button>
-        <button type="button" class="btn" id="reset-plays">還原成相簿的 48 場</button>
-        <span class="ctrl-hint" id="plays-hint"></span>
-      </div>
-      <p class="note">「常態誤差」、「三態誤差」是預測分數減去實際分數；滑鼠移到數字上可以看預測分數。</p>
+      <h2>用你的成績校準</h2>
+      <p class="lede">預設參數是用作者 48 場實際成績（2026 年 2～6 月的 DDR WORLD 結算畫面）擬合的。想換成自己的成績，打開下面的「成績表」照抄結算畫面的數字，再按「套用校準結果」。</p>
     </div>
 
     <div class="panel calib" id="cal-out"></div>
+
+    <details class="panel plays-box">
+      <summary>成績表（<span id="plays-count">—</span> 場）</summary>
+      <div class="calib">
+        <p class="note">每一列是一場，照抄「詳細リザルト」與「タイミンググラフ」：SD（バラつき）、タイミング平均（FAST 為正）、各判定數與 freeze 的 O.K. 數。分數由判定數自動算出；和畫面對不上時通常是有 freeze N.G.（畫面不顯示），補上 N.G. 數就會吻合。「常態誤差」、「三態誤差」是預測分數減去實際分數，滑鼠移到數字上可以看預測分數。</p>
+        <div class="tbl-wrap">
+          <table class="tbl plays" id="plays">
+            <thead><tr><th>#</th><th>SD</th><th>平均</th><th>MARV</th><th>PERF</th><th>GREAT</th><th>GOOD</th><th>MISS</th><th>O.K.</th><th>N.G.</th><th>分數</th><th>常態誤差</th><th>三態誤差</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="calib-actions">
+          <button type="button" class="btn" id="add-play">新增一場</button>
+          <button type="button" class="btn" id="reset-plays">還原成預設的 48 場</button>
+          <span class="ctrl-hint" id="plays-hint"></span>
+        </div>
+      </div>
+    </details>
 
     <div class="panel">
       <div class="chart-head">

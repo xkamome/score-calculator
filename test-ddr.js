@@ -65,6 +65,12 @@ check('MLE 混合 G²≈0', M.fitCounts('mixture', W, gen(M.mixtureScale(9, 0, 0
   check('三態：SD 很小時全部超準', t6.p, 0, 0);
   check('三態：SD 很小時模型 SD = 顯示 SD', t6.modelSd, 6, 1e-9);
   check('三態：超準態沒有偏移時全是 MARVELOUS', M.categoryProbs(M.boundedScale(W[0], 0, 2), W)[0], 1, 1e-12);
+  const nm = M.withoutMiss(M.categoryProbs(M.triModel(16, 1, D).dist, W));
+  check('假設沒有 MISS：MISS 機率 = 0', nm[4], 0, 0);
+  check('假設沒有 MISS：其餘加總 = 1', sum(nm), 1, 1e-12);
+  check('假設沒有 MISS：FC 機率 = 1', M.ddrFromCat(nm, { steps: 500, freezes: 20 }).fc, 1, 0);
+  const pm = M.ddrPredict(M.triModel(16, 1, D).dist, { steps: 500 }), pn = M.ddrFromCat(nm, { steps: 500 });
+  check('假設沒有 MISS：分數比照模型預測高', +(pn.score > pm.score), 1, 0);
   const tc = M.triModel(18, 0, D);
   check('三態：寬度上限是 GREAT 窗', tc.b, W[2], 1e-12);
   check('三態：不太準的步不會出 GOOD', M.categoryProbs(M.boundedScale(tc.b, 0, D.alB), W)[3], 0, 1e-15);
